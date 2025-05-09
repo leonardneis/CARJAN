@@ -1,42 +1,43 @@
+from bs4 import BeautifulSoup
+from jumping import make_pedestrian_jump
+from helpers import hex_to_rgb, cubic_bezier_curve, get_direction, parse_agents
+import multiprocessing
+import asyncio
+import math
+import json
+import psutil
+import socket
+from dotenv import load_dotenv
+import os
+from threading import Event
+import threading
+import requests
+import numpy as np
+import time
+import logging
+import carla
+import rdflib
+import subprocess
+from rdflib import Graph, URIRef, Literal, Namespace, RDF
+from flask import Flask, Response, jsonify, request
+from sendInfo import send_information
+from requestAJAN import destroy_actor, generate_actor, send_data, send_initialKnowledge
 from http import client
 import sys
 from webbrowser import get
 
 sys.stdout = open(sys.stdout.fileno(), 'w', buffering=1)
 
-from requestAJAN import destroy_actor, generate_actor, send_data, send_initialKnowledge
-from sendInfo import send_information
-from flask import Flask, Response, jsonify, request
-from rdflib import Graph, URIRef, Literal, Namespace, RDF
-import subprocess
-import rdflib
-import carla
-import logging
-import time
-import numpy as np
-import requests
-import threading
-from threading import Event
-import logging
-import os
-from dotenv import load_dotenv
-import socket
-import psutil
-import json
-import math
-import asyncio
-import multiprocessing
 # import keyboard
-from helpers import hex_to_rgb, cubic_bezier_curve, get_direction, parse_agents
-from jumping import make_pedestrian_jump
-from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 
 sparql_lock = threading.Lock()
 
-car_models_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', 'public', 'assets', 'carjan', 'car_models.json')
-prop_models_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', 'public', 'assets', 'carjan', 'prop_models.json')
+car_models_path = os.path.join(os.path.dirname(
+    __file__), '..', '..', '..', '..', 'public', 'assets', 'carjan', 'car_models.json')
+prop_models_path = os.path.join(os.path.dirname(
+    __file__), '..', '..', '..', '..', 'public', 'assets', 'carjan', 'prop_models.json')
 
 with open(car_models_path, 'r') as f:
     vehicle_models = json.load(f)
@@ -76,6 +77,7 @@ BASE = Namespace("http://carla.org/")
 
 # ! Classes
 
+
 class LookBehindRight:
     def __init__(self, walker, start_pos, char="standard"):
         self.walker = walker
@@ -112,6 +114,7 @@ class LookBehindRight:
         self.walker.blend_pose(0.25)
         self.done = True
         return "Done"
+
 
 class LookBehindLeft:
     def __init__(self, walker, start_pos, char="standard"):
@@ -150,6 +153,7 @@ class LookBehindLeft:
         self.done = True
         return "Done"
 
+
 class ResetPose:
 
     def __init__(self, walker):
@@ -181,6 +185,7 @@ def get_blueprint_id(models, name):
                 return object['blueprintId']
     return None
 
+
 def get_ground_height(location):
     """
     Holt die Bodenhöhe an einer bestimmten Position.
@@ -190,7 +195,8 @@ def get_ground_height(location):
     world = carla_client.get_world()
     try:
         map = world.get_map()
-        waypoint = map.get_waypoint(location, project_to_road=False)  # Nicht an die Straße binden
+        # Nicht an die Straße binden
+        waypoint = map.get_waypoint(location, project_to_road=False)
         if waypoint:
             return waypoint.transform.location.z
         else:
@@ -210,6 +216,7 @@ def get_ground_height(location):
         print(f"Error in get_ground_height: {e}")
         return location.z  # Fallback auf ursprüngliche Höhe
 
+
 def get_spectator_coordinates():
     # Angenommen, du hast bereits ein world-Objekt in CARLA
     spectator = world.get_spectator()  # Spectator-Kamera aus der CARLA-Welt holen
@@ -219,6 +226,7 @@ def get_spectator_coordinates():
 #     while True:
 #         if keyboard.is_pressed('enter'):
 #             get_spectator_coordinates()
+
 
 def set_anchor_point(map_name):
     """
@@ -247,17 +255,21 @@ def set_anchor_point(map_name):
 
     return anchor_point
 
+
 def is_port_in_use(port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(('localhost', port)) == 0
+
 
 def kill_process_on_port(port):
     for proc in psutil.process_iter(['pid', 'name', 'connections']):
         for conn in proc.info['connections']:
             if conn.laddr.port == port:
-                print(f"Killing process {proc.info['name']} (PID {proc.info['pid']}) on port {port}")
+                print(
+                    f"Killing process {proc.info['name']} (PID {proc.info['pid']}) on port {port}")
                 proc.kill()
                 break
+
 
 def getInformation(request):
     ajan_entity_id = None
@@ -295,6 +307,7 @@ def getInformation(request):
 
     return ajan_entity_id, async_request_uri
 
+
 def monitor_decision_boxes():
     """
     Überwacht alle Decision Boxes in einem separaten Thread.
@@ -303,6 +316,7 @@ def monitor_decision_boxes():
         for manager in decision_box_managers:
             manager.check_trigger_box()
         time.sleep(0.5)
+
 
 class DecisionBoxManager:
     def __init__(self, world, box_corners, dbox_id):
@@ -371,14 +385,17 @@ class DecisionBoxManager:
 
         self.vehicles_in_box = current_vehicles_in_box
 
+
 def set_spectator_view(world, location, rotation):
     spectator = world.get_spectator()
     transform = carla.Transform(location, rotation)
     spectator.set_transform(transform)
 
+
 def get_anchor_point(mapName):
     if mapName == "map01":
         return carla.Location(x=240, y=57.5, z=0.1)
+
 
 def generate_agent_for_entity(entity):
     """
@@ -416,7 +433,8 @@ def generate_agent_for_entity(entity):
         print(f"Successfully generated agent '{agent_name}'")
         return agent_name
     else:
-        print(f"Failed to generate AJAN agent for entity {entity['entity']}: {result['message']}")
+        print(
+            f"Failed to generate AJAN agent for entity {entity['entity']}: {result['message']}")
         return None
 
 
@@ -426,6 +444,7 @@ def get_carla_entity_by_ajan_id(ajan_entity_id):
         if mapping["ajan_agent_id"] == ajan_entity_id:
             return mapping["carla_entity_id"]
     return None
+
 
 def make_walker_move_forward(ajan_entity_id):
     global actor_list, carla_client, agent_speeds
@@ -452,6 +471,7 @@ def make_walker_move_forward(ajan_entity_id):
     # Steuerung auf den Walker anwenden
     walker.apply_control(walker_control)
 
+
 def get_next_waypoint(ajan_entity_id):
     global pathsPerEntity
     """
@@ -460,7 +480,8 @@ def get_next_waypoint(ajan_entity_id):
     """
 
     if ajan_entity_id not in pathsPerEntity or not pathsPerEntity[ajan_entity_id]:
-        print(f"No path found for AJAN entity ID '{ajan_entity_id}' or path is empty.")
+        print(
+            f"No path found for AJAN entity ID '{ajan_entity_id}' or path is empty.")
         return None
 
     # Hole den nächsten Wegpunkt aus pathsPerEntity
@@ -468,11 +489,13 @@ def get_next_waypoint(ajan_entity_id):
     print("next_waypoint:", next_waypoint)
     # Berechne die Carla Location des nächsten Wegpunkts
     try:
-        next_waypoint_location = get_carla_location_from_waypoint(next_waypoint)
+        next_waypoint_location = get_carla_location_from_waypoint(
+            next_waypoint)
         return next_waypoint_location
     except Exception as e:
         print(f"Error calculating Carla location for waypoint: {e}")
         return None
+
 
 def follow_bezier_curve(walker, bezier_points, async_request_uri, stop_flag):
     global carla_client, agent_speeds
@@ -480,7 +503,8 @@ def follow_bezier_curve(walker, bezier_points, async_request_uri, stop_flag):
     # Collision Sensor erstellen und anhängen
     blueprint_library = carla_client.get_world().get_blueprint_library()
     collision_sensor_bp = blueprint_library.find('sensor.other.collision')
-    collision_sensor = carla_client.get_world().spawn_actor(collision_sensor_bp, carla.Transform(), attach_to=walker)
+    collision_sensor = carla_client.get_world().spawn_actor(
+        collision_sensor_bp, carla.Transform(), attach_to=walker)
 
     collision_detected = False
 
@@ -510,7 +534,8 @@ def follow_bezier_curve(walker, bezier_points, async_request_uri, stop_flag):
 
             direction = get_direction(walker.get_location(), point)
             speed = agent_speeds.get(walker.id, 1.5)
-            walker.apply_control(carla.WalkerControl(direction=direction, speed=speed))
+            walker.apply_control(carla.WalkerControl(
+                direction=direction, speed=speed))
 
             while walker.get_location().distance(point) > 1:
                 if stop_flag.is_set():
@@ -523,13 +548,17 @@ def follow_bezier_curve(walker, bezier_points, async_request_uri, stop_flag):
     finally:
         collision_sensor.destroy()
 
+
 def get_follows_path_for_entity(ajan_entity_id):
     global entityList, paths
-    entity = next((entity for entity in entityList if entity["label"] == ajan_entity_id), None)
+    entity = next(
+        (entity for entity in entityList if entity["label"] == ajan_entity_id), None)
     if entity:
-        path = next((path for path in paths if path["path"] == entity["followsPath"]), None)
+        path = next(
+            (path for path in paths if path["path"] == entity["followsPath"]), None)
         print("Path found for entity:", path)
         return path
+
 
 def send_async_success(async_request_uri):
     """
@@ -543,7 +572,9 @@ def send_async_success(async_request_uri):
         if response.status_code == 200:
             print(f"Successfully sent success response to {async_request_uri}")
         else:
-            print(f"Failed to send success response to {async_request_uri}: {response.status_code}")
+            print(
+                f"Failed to send success response to {async_request_uri}: {response.status_code}")
+
 
 def get_carla_location_from_waypoint(waypoint):
 
@@ -556,8 +587,10 @@ def get_carla_location_from_waypoint(waypoint):
     half_cell_offset_x = 0
 
     # Berechne die Carla-Koordinaten des Wegpunkts
-    waypoint_x = (float(waypoint["y"]) + offset_y) * cell_height + half_cell_offset_y
-    waypoint_y = (float(waypoint["x"]) + offset_x) * cell_width + half_cell_offset_x
+    waypoint_x = (float(waypoint["y"]) + offset_y) * \
+        cell_height + half_cell_offset_y
+    waypoint_y = (float(waypoint["x"]) + offset_x) * \
+        cell_width + half_cell_offset_x
 
     # Adjust the waypoint location based on the positionInCell attribute
     position_in_cell = waypoint.get("positionInCell", "middle-center")
@@ -592,6 +625,7 @@ def get_carla_location_from_waypoint(waypoint):
 
 # ! Loaders
 
+
 def load_paths(paths, entities, show_paths):
     global carla_client, anchor_point
     cell_width = 4.0  # Einheitsgröße für die Breite der Zellen
@@ -599,16 +633,18 @@ def load_paths(paths, entities, show_paths):
     follows_paths = set()
     for entity in entities:
         if isinstance(entity.get('followsPath', None), str):
-            follows_paths.add(entity['followsPath'])  # Füge die Pfad-ID zum Set hinzu
-            follows_paths.add(entity['fallbackPath'])  # Füge die Fallback-Pfad-ID zum Set hinzu
+            # Füge die Pfad-ID zum Set hinzu
+            follows_paths.add(entity['followsPath'])
+            # Füge die Fallback-Pfad-ID zum Set hinzu
+            follows_paths.add(entity['fallbackPath'])
 
     # Nur die Pfade berücksichtigen, die von den Entitäten verfolgt werden
     filtered_paths = [path for path in paths if path["path"] in follows_paths]
 
-
     for path in filtered_paths:
         path_color_hex = path.get("color")  # Farbe des Pfads
-        path_color_rgb = hex_to_rgb(path_color_hex)  # Farbe von Hex nach RGB umwandeln
+        # Farbe von Hex nach RGB umwandeln
+        path_color_rgb = hex_to_rgb(path_color_hex)
 
         # Extrahiere r, g, b and caste sie als int
         r, g, b = path_color_rgb
@@ -633,52 +669,54 @@ def load_paths(paths, entities, show_paths):
             )
 
         if show_paths == "true":
-          # Berechne die Bezier-Kurve and zeichne sie
-          if len(waypoint_locations) > 1:
-              for i in range(len(waypoint_locations) - 1):
-                  start_point = waypoint_locations[i]
-                  end_point = waypoint_locations[i + 1]
+            # Berechne die Bezier-Kurve and zeichne sie
+            if len(waypoint_locations) > 1:
+                for i in range(len(waypoint_locations) - 1):
+                    start_point = waypoint_locations[i]
+                    end_point = waypoint_locations[i + 1]
 
-                  # Berechne den Richtungsvektor zwischen den beiden Punkten
-                  direction_x = end_point.x - start_point.x
-                  direction_y = end_point.y - start_point.y
+                    # Berechne den Richtungsvektor zwischen den beiden Punkten
+                    direction_x = end_point.x - start_point.x
+                    direction_y = end_point.y - start_point.y
 
-                  # Berechne die Länge des Richtungsvektors
-                  length = math.sqrt(direction_x**2 + direction_y**2)
+                    # Berechne die Länge des Richtungsvektors
+                    length = math.sqrt(direction_x**2 + direction_y**2)
 
-                  # Normalisiere den Richtungsvektor
-                  direction_x /= length
-                  direction_y /= length
+                    # Normalisiere den Richtungsvektor
+                    direction_x /= length
+                    direction_y /= length
 
-                  # Berechne die Kontrollpunkte, basierend auf der Drittelregel
-                  cp1_x = start_point.x + (end_point.x - start_point.x) / 2
-                  cp1_y = start_point.y  # Y bleibt konstant
+                    # Berechne die Kontrollpunkte, basierend auf der Drittelregel
+                    cp1_x = start_point.x + (end_point.x - start_point.x) / 2
+                    cp1_y = start_point.y  # Y bleibt konstant
 
-                  cp2_x = end_point.x - (end_point.x - start_point.x) / 2
-                  cp2_y = end_point.y  # Y bleibt konstant
+                    cp2_x = end_point.x - (end_point.x - start_point.x) / 2
+                    cp2_y = end_point.y  # Y bleibt konstant
 
-                  control_point_1 = carla.Location(cp1_x, cp1_y, start_point.z)
-                  control_point_2 = carla.Location(cp2_x, cp2_y, end_point.z)
+                    control_point_1 = carla.Location(
+                        cp1_x, cp1_y, start_point.z)
+                    control_point_2 = carla.Location(cp2_x, cp2_y, end_point.z)
 
-                  # Zeichne die Kontrollpunkte als rote "O"s
-                  # world.debug.draw_string(control_point_1, "O", draw_shadow=False, color=carla.Color(255, 0, 0), life_time=1000)
-                  # world.debug.draw_string(control_point_2, "O", draw_shadow=False, color=carla.Color(255, 0, 0), life_time=1000)
+                    # Zeichne die Kontrollpunkte als rote "O"s
+                    # world.debug.draw_string(control_point_1, "O", draw_shadow=False, color=carla.Color(255, 0, 0), life_time=1000)
+                    # world.debug.draw_string(control_point_2, "O", draw_shadow=False, color=carla.Color(255, 0, 0), life_time=1000)
 
-                  # Berechne die Punkte auf der Bezierkurve für das Segment
-                  curve_points = cubic_bezier_curve(start_point, control_point_1, control_point_2, end_point)
+                    # Berechne die Punkte auf der Bezierkurve für das Segment
+                    curve_points = cubic_bezier_curve(
+                        start_point, control_point_1, control_point_2, end_point)
 
-                  # Zeichne die Linie zwischen den Punkten der Bezierkurve
-                  for j in range(len(curve_points) - 1):
-                      start = curve_points[j]
-                      end = curve_points[j + 1]
+                    # Zeichne die Linie zwischen den Punkten der Bezierkurve
+                    for j in range(len(curve_points) - 1):
+                        start = curve_points[j]
+                        end = curve_points[j + 1]
 
-                      world.debug.draw_line(
-                          start,
-                          end,
-                          thickness=0.1,
-                          color=path_color,
-                          life_time=1000  # Dauerhaft sichtbar
-                      )
+                        world.debug.draw_line(
+                            start,
+                            end,
+                            thickness=0.1,
+                            color=path_color,
+                            life_time=1000  # Dauerhaft sichtbar
+                        )
 
 
 def load_grid(grid_width=12, grid_height=12, cw=5, ch=5):
@@ -706,13 +744,15 @@ def load_grid(grid_width=12, grid_height=12, cw=5, ch=5):
         # Vertauschte Achsen and kleinere Zellen
         for i in range(grid_height + 1):
             # Vertikale Linien (auf der Y-Achse)
-            start_y = center_y + i * cell_height - (grid_height * cell_height / 2)
+            start_y = center_y + i * cell_height - \
+                (grid_height * cell_height / 2)
             start_x = center_x - (grid_width * cell_width / 2)
             end_x = center_x + (grid_width * cell_width / 2)
 
             start_loc = carla.Location(start_x, start_y, center_z)
             end_loc = carla.Location(end_x, start_y, center_z)
-            world.debug.draw_line(start_loc, end_loc, thickness=0.02, color=grid_color)
+            world.debug.draw_line(start_loc, end_loc,
+                                  thickness=0.02, color=grid_color)
 
         for j in range(grid_width + 1):
             # Horizontale Linien (auf der X-Achse)
@@ -722,7 +762,8 @@ def load_grid(grid_width=12, grid_height=12, cw=5, ch=5):
 
             start_loc = carla.Location(start_x, start_y, center_z)
             end_loc = carla.Location(start_x, end_y, center_z)
-            world.debug.draw_line(start_loc, end_loc, thickness=0.02, color=grid_color)
+            world.debug.draw_line(start_loc, end_loc,
+                                  thickness=0.02, color=grid_color)
 
         return {"status": "Grid drawn successfully with 1:1 ratio, adjusted size and corrected axes"}
 
@@ -730,11 +771,13 @@ def load_grid(grid_width=12, grid_height=12, cw=5, ch=5):
         print(f"Error in load_grid: {str(e)}")
         return {"error": str(e)}
 
+
 def load_world(weather, camera_position):
     global carla_client, world
     try:
         if carla_client is None:
-            raise ValueError("CARLA client is not initialized. Start CARLA first.")
+            raise ValueError(
+                "CARLA client is not initialized. Start CARLA first.")
 
         # Lade die Welt
         world = carla_client.load_world('Town01_Opt')
@@ -755,6 +798,7 @@ def load_world(weather, camera_position):
         print(f"Error in load_world: {e}")
         return False
 
+
 def load_entities(entities, paths):
     global carla_client, anchor_point, actor_list, pathsPerEntity, vehicle_models, prop_models
 
@@ -772,7 +816,6 @@ def load_entities(entities, paths):
 
     spawned_entities = set()  # Verhindert doppelte Spawns
 
-
     for entity in entities:
         entity_id = entity["entity"]
 
@@ -782,14 +825,18 @@ def load_entities(entities, paths):
             continue
 
         # Berechne neue Position basierend auf dem Ankerpunkt, den Skalierungsfaktoren and dem Offset
-        new_x = (float(entity["y"]) + offset_y) * cell_height + half_cell_offset_y  # Vertikal (spawnPointY -> y + Offset)
-        new_y = (float(entity["x"]) + offset_x) * cell_width + half_cell_offset_x  # Horizontal (spawnPointX -> x + Offset)
+        # Vertikal (spawnPointY -> y + Offset)
+        new_x = (float(entity["y"]) + offset_y) * \
+            cell_height + half_cell_offset_y
+        # Horizontal (spawnPointX -> x + Offset)
+        new_y = (float(entity["x"]) + offset_x) * \
+            cell_width + half_cell_offset_x
         spawn_location = carla.Location(
             x=anchor_point.x + new_y,  # x-Offset
-            y=anchor_point.y - new_x,  # y-Offset (invertiert für CARLA-Koordinaten)
+            # y-Offset (invertiert für CARLA-Koordinaten)
+            y=anchor_point.y - new_x,
             z=anchor_point.z + 1  # Leicht über dem Boden
         )
-
 
         # Bestimme die Rotation (Heading)
         heading = entity.get("heading", None)
@@ -797,32 +844,35 @@ def load_entities(entities, paths):
 
         if heading:
             if heading == "North":
-              rotation = carla.Rotation(pitch=0, yaw=-180)
+                rotation = carla.Rotation(pitch=0, yaw=-180)
             elif heading == "North-East":
-              rotation = carla.Rotation(pitch=0, yaw=-135)
+                rotation = carla.Rotation(pitch=0, yaw=-135)
             elif heading == "East":
-              rotation = carla.Rotation(pitch=0, yaw=-90)
+                rotation = carla.Rotation(pitch=0, yaw=-90)
             elif heading == "South-East":
-              rotation = carla.Rotation(pitch=0, yaw=-45)
+                rotation = carla.Rotation(pitch=0, yaw=-45)
             elif heading == "South":
-              rotation = carla.Rotation(pitch=0, yaw=0)
+                rotation = carla.Rotation(pitch=0, yaw=0)
             elif heading == "South-West":
-              rotation = carla.Rotation(pitch=0, yaw=45)
+                rotation = carla.Rotation(pitch=0, yaw=45)
             elif heading == "West":
-              rotation = carla.Rotation(pitch=0, yaw=90)
+                rotation = carla.Rotation(pitch=0, yaw=90)
             elif heading == "North-West":
-              rotation = carla.Rotation(pitch=0, yaw=135)
+                rotation = carla.Rotation(pitch=0, yaw=135)
             elif heading == "path":
                 # Wenn der Entity "path" folgt, dann berechne die Richtung des ersten Waypoints des Pfades
                 follows_path = entity.get("followsPath", None)
                 if follows_path:
                     # Finde den zugehörigen Pfad
-                    path = next((p for p in paths if p["path"] == follows_path), None)
+                    path = next(
+                        (p for p in paths if p["path"] == follows_path), None)
                     if path and path["waypoints"]:
                         # Hole den ersten Waypoint des Pfades
                         first_waypoint = path["waypoints"][0]
-                        waypoint_x = (float(first_waypoint["y"]) + offset_y) * cell_height + half_cell_offset_y
-                        waypoint_y = (float(first_waypoint["x"]) + offset_x) * cell_width + half_cell_offset_x
+                        waypoint_x = (
+                            float(first_waypoint["y"]) + offset_y) * cell_height + half_cell_offset_y
+                        waypoint_y = (
+                            float(first_waypoint["x"]) + offset_x) * cell_width + half_cell_offset_x
                         waypoint_location = carla.Location(
                             x=anchor_point.x + waypoint_y,
                             y=anchor_point.y - waypoint_x,
@@ -839,9 +889,10 @@ def load_entities(entities, paths):
                         # Berechne die Richtung (Yaw) zum ersten Waypoint
                         direction_x = waypoint_location.x - spawn_location.x
                         direction_y = waypoint_location.y - spawn_location.y
-                        yaw = math.degrees(math.atan2(direction_y, direction_x))  # Berechne den Winkel (Yaw)
+                        # Berechne den Winkel (Yaw)
+                        yaw = math.degrees(math.atan2(
+                            direction_y, direction_x))
                         rotation = carla.Rotation(pitch=0, yaw=yaw)
-
 
         pedestrian_actor = None
         vehicle_actor = None
@@ -852,12 +903,14 @@ def load_entities(entities, paths):
             if model is None or model == "null":
                 model = "0001"
             entity["model"] = model
-            model_suffix = entity["model"][-4:] if len(entity["model"]) >= 4 else "0001"
+            model_suffix = entity["model"][-4:] if len(
+                entity["model"]) >= 4 else "0001"
             pedestrian_model = f"walker.pedestrian.{model_suffix}"
             pedestrian_blueprint = blueprint_library.find(pedestrian_model)
 
             pedestrian_transform = carla.Transform(spawn_location, rotation)
-            pedestrian_actor = world.try_spawn_actor(pedestrian_blueprint, pedestrian_transform)
+            pedestrian_actor = world.try_spawn_actor(
+                pedestrian_blueprint, pedestrian_transform)
 
             ajan_agent_id = generate_agent_for_entity(entity)
             if ajan_agent_id:
@@ -868,14 +921,18 @@ def load_entities(entities, paths):
                 agent_speeds[pedestrian_actor.id] = 1.5
 
             if pedestrian_actor:
-                spawned_entities.add(entity_id)  # Markiere die Entity als gespawned
+                # Markiere die Entity als gespawned
+                spawned_entities.add(entity_id)
             else:
-                print(f"Failed to spawn Pedestrian '{entity['label']}' at: {spawn_location}")
+                print(
+                    f"Failed to spawn Pedestrian '{entity['label']}' at: {spawn_location}")
 
         elif entity["type"] == "Vehicle":
-            vehicle_blueprint = blueprint_library.find(get_blueprint_id(vehicle_models, entity["model"]))
+            vehicle_blueprint = blueprint_library.find(
+                get_blueprint_id(vehicle_models, entity["model"]))
             vehicle_transform = carla.Transform(spawn_location, rotation)
-            vehicle_actor = world.try_spawn_actor(vehicle_blueprint, vehicle_transform)
+            vehicle_actor = world.try_spawn_actor(
+                vehicle_blueprint, vehicle_transform)
 
             ajan_agent_id = generate_agent_for_entity(entity)
             if ajan_agent_id:
@@ -888,13 +945,16 @@ def load_entities(entities, paths):
             if vehicle_actor:
                 spawned_entities.add(entity_id)
             else:
-                print(f"Failed to spawn Vehicle '{entity['label']}' at: {spawn_location}")
+                print(
+                    f"Failed to spawn Vehicle '{entity['label']}' at: {spawn_location}")
 
         elif entity["type"] == "Obstacle":
             # Prop-Blueprint finden
-            prop_blueprint = blueprint_library.find(get_blueprint_id(prop_models, entity["model"]))
+            prop_blueprint = blueprint_library.find(
+                get_blueprint_id(prop_models, entity["model"]))
             if not prop_blueprint:
-                print(f"Failed to find blueprint for Prop model: {entity['model']}")
+                print(
+                    f"Failed to find blueprint for Prop model: {entity['model']}")
                 return
 
             # Höhe des Bodens an der Spawn-Position ermitteln
@@ -911,14 +971,17 @@ def load_entities(entities, paths):
             if prop_actor:
                 spawned_entities.add(entity_id)
             else:
-                print(f"Failed to spawn Prop '{entity['label']}' at: {spawn_location}")
+                print(
+                    f"Failed to spawn Prop '{entity['label']}' at: {spawn_location}")
 
         if ("followsPath" in entity):
             follows_path = entity["followsPath"]
-            matching_path = next((p for p in paths if p["path"] == follows_path), None)
+            matching_path = next(
+                (p for p in paths if p["path"] == follows_path), None)
 
             if matching_path:
-                pathsPerEntity[entity["label"]] = list(matching_path["waypoints"])
+                pathsPerEntity[entity["label"]] = list(
+                    matching_path["waypoints"])
 
 
 def load_camera(camera_position):
@@ -936,23 +999,28 @@ def load_camera(camera_position):
     base_location = anchor_point
 
     if camera_position == 'down':
-        new_location = carla.Location(base_location.x - 40, base_location.y, base_location.z + 20)
+        new_location = carla.Location(
+            base_location.x - 40, base_location.y, base_location.z + 20)
         rotation = carla.Rotation(pitch=-25, yaw=0)
 
     elif camera_position == 'up':
-        new_location = carla.Location(base_location.x + 40, base_location.y, base_location.z + 20)
+        new_location = carla.Location(
+            base_location.x + 40, base_location.y, base_location.z + 20)
         rotation = carla.Rotation(pitch=-25, yaw=180)
 
     elif camera_position == 'left':
-        new_location = carla.Location(base_location.x, base_location.y + 30, base_location.z + 10)
+        new_location = carla.Location(
+            base_location.x, base_location.y + 30, base_location.z + 10)
         rotation = carla.Rotation(pitch=-10, yaw=-90)
 
     elif camera_position == 'right':
-        new_location = carla.Location(base_location.x, base_location.y - 30, base_location.z+ 10)
+        new_location = carla.Location(
+            base_location.x, base_location.y - 30, base_location.z + 10)
         rotation = carla.Rotation(pitch=-10, yaw=90)
 
     elif camera_position == 'birdseye':
-        new_location = carla.Location(base_location.x, base_location.y, base_location.z + 30)
+        new_location = carla.Location(
+            base_location.x, base_location.y, base_location.z + 30)
         rotation = carla.Rotation(pitch=-90, yaw=0)
 
     else:
@@ -960,6 +1028,7 @@ def load_camera(camera_position):
         rotation = carla.Rotation(pitch=0, yaw=0)
 
     spectator.set_transform(carla.Transform(new_location, rotation))
+
 
 def load_decisionboxes(dboxes):
     global carla_client, anchor_point, decision_box_managers
@@ -992,27 +1061,34 @@ def load_decisionboxes(dboxes):
         # Compute the corners of the Decision Box using the offset and scaling system
         box_corners = [
             carla.Location(
-                x=anchor_point.x + ((start_x + offset_x) * cell_width + half_cell_offset_x),
-                y=anchor_point.y - ((start_y + offset_y) * cell_height + half_cell_offset_y),
+                x=anchor_point.x + ((start_x + offset_x) *
+                                    cell_width + half_cell_offset_x),
+                y=anchor_point.y - ((start_y + offset_y) *
+                                    cell_height + half_cell_offset_y),
                 z=min_z
             ),
             carla.Location(
-                x=anchor_point.x + ((start_x + offset_x) * cell_width + half_cell_offset_x),
-                y=anchor_point.y - ((end_y + offset_y) * cell_height + half_cell_offset_y),
+                x=anchor_point.x + ((start_x + offset_x) *
+                                    cell_width + half_cell_offset_x),
+                y=anchor_point.y - ((end_y + offset_y) *
+                                    cell_height + half_cell_offset_y),
                 z=min_z
             ),
             carla.Location(
-                x=anchor_point.x + ((end_x + offset_x) * cell_width + half_cell_offset_x),
-                y=anchor_point.y - ((end_y + offset_y) * cell_height + half_cell_offset_y),
+                x=anchor_point.x + ((end_x + offset_x) *
+                                    cell_width + half_cell_offset_x),
+                y=anchor_point.y - ((end_y + offset_y) *
+                                    cell_height + half_cell_offset_y),
                 z=min_z
             ),
             carla.Location(
-                x=anchor_point.x + ((end_x + offset_x) * cell_width + half_cell_offset_x),
-                y=anchor_point.y - ((start_y + offset_y) * cell_height + half_cell_offset_y),
+                x=anchor_point.x + ((end_x + offset_x) *
+                                    cell_width + half_cell_offset_x),
+                y=anchor_point.y - ((start_y + offset_y) *
+                                    cell_height + half_cell_offset_y),
                 z=min_z
             ),
         ]
-
 
         # Draw the Decision Box in CARLA
         for i in range(len(box_corners)):
@@ -1026,7 +1102,8 @@ def load_decisionboxes(dboxes):
             )
 
             # Draw top face
-            start_top = carla.Location(x=start_bottom.x, y=start_bottom.y, z=max_z)
+            start_top = carla.Location(
+                x=start_bottom.x, y=start_bottom.y, z=max_z)
             end_top = carla.Location(x=end_bottom.x, y=end_bottom.y, z=max_z)
             world.debug.draw_line(
                 start_top, end_top, thickness=0.05,
@@ -1052,7 +1129,7 @@ def disable_specific_objects():
         carla.CityObjectLabel.Other,  # Dies könnte Bushaltestellen, Mülleimer, usw. umfassen
         carla.CityObjectLabel.Static,  # Statische Objekte, die nicht spezifiziert sind
         carla.CityObjectLabel.Vegetation,  # Bäume, Sträucher, etc.
-        carla.CityObjectLabel.Fences, # Zäune
+        carla.CityObjectLabel.Fences,  # Zäune
         carla.CityObjectLabel.RoadLines,  # Straßenmarkierungen
         carla.CityObjectLabel.Poles,  # Laternenpfähle, Verkehrsschilder, etc.
         carla.CityObjectLabel.TrafficSigns,  # Verkehrsschilder,
@@ -1072,21 +1149,22 @@ def unload_stuff():
     global carla_client
     world = carla_client.get_world()
     unloadList = [
-            carla.MapLayer.NONE,
-            carla.MapLayer.Buildings,
-            carla.MapLayer.Decals,
-            carla.MapLayer.Foliage,
-            carla.MapLayer.Ground,
-            carla.MapLayer.ParkedVehicles,
-            carla.MapLayer.Particles,
-            carla.MapLayer.StreetLights,
-            carla.MapLayer.Walls,
-        ]
+        carla.MapLayer.NONE,
+        carla.MapLayer.Buildings,
+        carla.MapLayer.Decals,
+        carla.MapLayer.Foliage,
+        carla.MapLayer.Ground,
+        carla.MapLayer.ParkedVehicles,
+        carla.MapLayer.Particles,
+        carla.MapLayer.StreetLights,
+        carla.MapLayer.Walls,
+    ]
 
     print("Unloading map layers...")
 
     for layer in unloadList:
         world.unload_map_layer(layer)
+
 
 def on_decision_box_trigger(dbox_id, vehicles, in_box):
     """
@@ -1102,7 +1180,8 @@ def on_decision_box_trigger(dbox_id, vehicles, in_box):
     ]
 
     if not agents:
-        print(f"No agent chose decision-box {dbox_id}, triggering it does not have any effect.")
+        print(
+            f"No agent chose decision-box {dbox_id}, triggering it does not have any effect.")
         return
 
     # RDF Triple-Information für jedes Fahrzeug an jeden Agenten senden
@@ -1113,7 +1192,8 @@ def on_decision_box_trigger(dbox_id, vehicles, in_box):
             obj = "true" if in_box else "false"
 
             # Sende Information an den Agent
-            send_information(agent_name, "SaveKnowledge", subject, predicate, obj)
+            send_information(agent_name, "SaveKnowledge",
+                             subject, predicate, obj)
 
     # Daten an Flask-Server senden
     flask_url = "http://localhost:5000/decision-box-trigger"
@@ -1133,12 +1213,16 @@ def on_decision_box_trigger(dbox_id, vehicles, in_box):
 # TODO Implement actions
 
 # * async uri
+
+
 def send_async_request(async_request_uri):
     data = '<http://carla.org/pedestrian> <http://at> <http://waypoint> .'
     headers = {'Content-Type': 'text/turtle'}
     return requests.post(async_request_uri, data=data, headers=headers)
 
 # * pedestrian on road
+
+
 def is_pedestrian_on_road(pedestrian):
     pedestrian_location = pedestrian.get_location()
     waypoint = current_map.get_waypoint(pedestrian_location)
@@ -1146,6 +1230,8 @@ def is_pedestrian_on_road(pedestrian):
     return waypoint and waypoint.lane_type == carla.LaneType.Driving
 
 # * steer direction
+
+
 def getDirection(pedestrian, waypoint):
     pedestrian_location = pedestrian.get_location()
     direction = carla.Vector3D(
@@ -1159,6 +1245,7 @@ def getDirection(pedestrian, waypoint):
     direction.y /= length
 
     return direction
+
 
 def send_unsafe_info():
     url = 'http://localhost:8080/ajan/agents/Carla?capability=DataTransfer'
@@ -1174,6 +1261,7 @@ def send_newCrossingRequest():
 
     headers = {'Content-Type': 'application/trig'}
     requests.post(url, data='', headers=headers)
+
 
 def get_speed_information(request):
     """
@@ -1200,6 +1288,7 @@ def get_speed_information(request):
 
     return speed
 
+
 def get_direction_information(request):
     """
     Parses the direction information from the request.
@@ -1224,6 +1313,7 @@ def get_direction_information(request):
         direction = str(row.direction)
 
     return direction
+
 
 def get_waypoint_information(request):
     """
@@ -1259,6 +1349,7 @@ def get_waypoint_information(request):
 
     return waypoint_data
 
+
 def get_path_information(request):
     """
     Parses the new path to follow.
@@ -1287,6 +1378,7 @@ def get_path_information(request):
 # ! Routes
 # * Implements routes for Behavior Tree Node Endpoints
 
+
 @app.route('/set_async_uri', methods=['POST'])
 def set_async_uri():
     global global_async_uri
@@ -1294,13 +1386,16 @@ def set_async_uri():
     global_async_uri = data.get('async_uri')
     return jsonify({"message": "Async URI updated"}), 200
 
+
 @app.route("/hi", methods=["GET"])
 def hi():
     return "Hello, World!"
 
+
 @app.route('/health_check', methods=['GET'])
 def health_check():
     return jsonify({"status": "OK"}), 200
+
 
 @app.route('/reset_carla', methods=['GET'])
 def reset_carla():
@@ -1324,13 +1419,15 @@ def reset_carla():
 
         # Setze die Kamera zurück (auf eine Standardposition über dem Ursprung)
         spectator = world.get_spectator()
-        transform = carla.Transform(carla.Location(x=0, y=0, z=50), carla.Rotation(pitch=-90))
+        transform = carla.Transform(carla.Location(
+            x=0, y=0, z=50), carla.Rotation(pitch=-90))
         spectator.set_transform(transform)
 
         return jsonify({"status": "Carla environment reset to default settings"})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @app.route('/start_agent', methods=['POST'])
 def start_agent():
@@ -1355,7 +1452,8 @@ def start_agent():
             }
         }
 
-        send_data(example_data)  # Nutzt die send_data-Funktion aus requestAJAN.py
+        # Nutzt die send_data-Funktion aus requestAJAN.py
+        send_data(example_data)
 
         return jsonify({"status": "success", "message": f"Data sent for {entity_id}"})
     except Exception as e:
@@ -1365,6 +1463,7 @@ def start_agent():
 # ! TODO
 #   TODO
 #   TODO
+
 
 @app.route('/follow_path', methods=['POST'])
 def follow_path():
@@ -1404,11 +1503,13 @@ def follow_path():
             y=end_point.y,
             z=end_point.z
         )
-        bezier_points = cubic_bezier_curve(start_point, control_point_1, control_point_2, end_point)
+        bezier_points = cubic_bezier_curve(
+            start_point, control_point_1, control_point_2, end_point)
 
         # Debug: Kurve visualisieren
         for i in range(len(bezier_points) - 1):
-            world.debug.draw_line(bezier_points[i], bezier_points[i + 1], thickness=0.01, color=carla.Color(255, 255, 255), life_time=100.0)
+            world.debug.draw_line(bezier_points[i], bezier_points[i + 1],
+                                  thickness=0.01, color=carla.Color(255, 255, 255), life_time=100.0)
 
         # Stop existing thread
         if carla_entity_id in threads_per_actor:
@@ -1418,11 +1519,14 @@ def follow_path():
         # Create a new stop flag
         stop_flag = Event()
         if is_vehicle:
-            thread = threading.Thread(target=follow_bezier_curve_vehicle, args=(actor, bezier_points, async_request_uri, stop_flag))
+            thread = threading.Thread(target=follow_bezier_curve_vehicle, args=(
+                actor, bezier_points, async_request_uri, stop_flag))
         else:
-            thread = threading.Thread(target=follow_bezier_curve, args=(actor, bezier_points, async_request_uri, stop_flag))
+            thread = threading.Thread(target=follow_bezier_curve, args=(
+                actor, bezier_points, async_request_uri, stop_flag))
 
-        threads_per_actor[carla_entity_id] = {"thread": thread, "stop_flag": stop_flag}
+        threads_per_actor[carla_entity_id] = {
+            "thread": thread, "stop_flag": stop_flag}
         thread.start()
 
         return Response('<http://Agent> <http://follows> <http://path> .', mimetype='text/turtle', status=200)
@@ -1430,6 +1534,7 @@ def follow_path():
     except Exception as e:
         print(f"Error in follow_path: {str(e)}")
         return Response('<http://Agent> <http://followsNot> <http://path> .', mimetype='text/turtle', status=500)
+
 
 def follow_bezier_curve_vehicle(vehicle, waypoints, async_request_uri, stop_flag):
     max_global_speed = 30  # km/h
@@ -1500,27 +1605,32 @@ def follow_bezier_curve_vehicle(vehicle, waypoints, async_request_uri, stop_flag
         speed_factor = 0.2
         lookahead_distance = base_lookahead + speed_factor * current_speed
 
-        target_point = get_lookahead_point(vehicle_location, waypoints, lookahead_distance)
+        target_point = get_lookahead_point(
+            vehicle_location, waypoints, lookahead_distance)
         if not target_point:
             reached_destination = True
             break
 
         vehicle_transform = vehicle.get_transform()
         vehicle_yaw = math.radians(vehicle_transform.rotation.yaw)
-        target_vector = carla.Vector3D(target_point.x - vehicle_location.x, target_point.y - vehicle_location.y, 0)
+        target_vector = carla.Vector3D(
+            target_point.x - vehicle_location.x, target_point.y - vehicle_location.y, 0)
         target_yaw = math.atan2(target_vector.y, target_vector.x)
 
         yaw_error = target_yaw - vehicle_yaw
         yaw_error = (yaw_error + math.pi) % (2 * math.pi) - math.pi
 
-        steer_output, steer_integral, steer_prev_error = pid_control(yaw_error, steer_prev_error, steer_integral, dt, Kp_steer, Ki_steer, Kd_steer)
+        steer_output, steer_integral, steer_prev_error = pid_control(
+            yaw_error, steer_prev_error, steer_integral, dt, Kp_steer, Ki_steer, Kd_steer)
         steer_value = max(-1.0, min(1.0, steer_output))
 
-        curvature = (target_yaw - vehicle_yaw) / max(vehicle_location.distance(target_point), 0.001)
+        curvature = (target_yaw - vehicle_yaw) / \
+            max(vehicle_location.distance(target_point), 0.001)
         target_speed = get_target_speed(curvature, max_speed=max_global_speed)
 
         speed_error = (target_speed - current_speed)
-        speed_output, speed_integral, speed_prev_error = pid_control(speed_error, speed_prev_error, speed_integral, dt, Kp_speed, Ki_speed, Kd_speed)
+        speed_output, speed_integral, speed_prev_error = pid_control(
+            speed_error, speed_prev_error, speed_integral, dt, Kp_speed, Ki_speed, Kd_speed)
 
         if speed_output > 0:
             throttle = min(0.7, speed_output)
@@ -1568,7 +1678,7 @@ def wait():
                 # Handle pedestrian
                 entity.apply_control(carla.WalkerControl(
                     speed=0.0,
-                    direction=carla.Vector3D(0,0,0),
+                    direction=carla.Vector3D(0, 0, 0),
                     jump=False
                 ))
                 send_async_request(async_request_uri)
@@ -1588,11 +1698,13 @@ def wait():
             time.sleep(1)  # Wait for 1 second before checking again
 
     # Start a new thread for waiting
-    wait_thread = threading.Thread(target=wait_and_stop, args=(entity, async_request_uri))
+    wait_thread = threading.Thread(
+        target=wait_and_stop, args=(entity, async_request_uri))
     wait_thread.start()
 
     # Return an RDF triple immediately
     return Response('<http://Agent> <http://waits> <http://indefinitely> .', mimetype='text/turtle', status=200)
+
 
 @app.route('/follow_direction', methods=['POST'])
 def follow_direction():
@@ -1630,11 +1742,14 @@ def follow_direction():
         }
         direction = direction_map[direction_input]
         # Function to move the pedestrian in a thread
+
         def move_walker(walker, direction, async_request_uri):
-            walker.apply_control(carla.WalkerControl(direction=direction, speed=1.5))
+            walker.apply_control(carla.WalkerControl(
+                direction=direction, speed=1.5))
 
         # Start movement in a new thread
-        movement_thread = threading.Thread(target=move_walker, args=(walker, direction, async_request_uri))
+        movement_thread = threading.Thread(
+            target=move_walker, args=(walker, direction, async_request_uri))
         movement_thread.start()
 
         # Return immediate response
@@ -1643,6 +1758,7 @@ def follow_direction():
     except Exception as e:
         print(f"Error in follow_direction: {str(e)}")
         return jsonify({"status": "error", "message": str(e)}), 500
+
 
 @app.route('/adjust_speed', methods=['POST'])
 def adjust_speed():
@@ -1657,15 +1773,15 @@ def adjust_speed():
             return jsonify({"status": "error", "message": "CARLA Entity not found"}), 404
 
         new_speed = get_speed_information(request)
-
+        print("newspeed: ", new_speed)
         if new_speed is None or new_speed < 0:
             print("Invalid speed value, using default speed value.")
             actor = world.get_actor(carla_entity_id)
 
-            if(carla_entity_id in agent_speeds and isinstance(actor, carla.Vehicle)):
-              new_speed = 8.3
+            if (carla_entity_id in agent_speeds and isinstance(actor, carla.Vehicle)):
+                new_speed = 8.3
             else:
-              new_speed = 1.5
+                new_speed = 1.5
 
         agent_speeds[carla_entity_id] = new_speed
 
@@ -1673,6 +1789,7 @@ def adjust_speed():
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
 
 @app.route('/check_waypoint_proximity', methods=['POST'])
 def check_waypoint_proximity():
@@ -1705,18 +1822,18 @@ def check_waypoint_proximity():
         # Function to move the pedestrian in a thread
         def move_walker(walker, waypoint_location, async_request_uri):
 
-
             while True:
-              walker_location = walker.get_location()
-              distance = walker_location.distance(waypoint_location)
-              if distance < 1.0:
-                  send_async_request(async_request_uri)
-                  break
+                walker_location = walker.get_location()
+                distance = walker_location.distance(waypoint_location)
+                if distance < 1.0:
+                    send_async_request(async_request_uri)
+                    break
 
-              time.sleep(0.1)
+                time.sleep(0.1)
 
         # Start movement in a new thread
-        movement_thread = threading.Thread(target=move_walker, args=(walker, waypoint_location, async_request_uri))
+        movement_thread = threading.Thread(target=move_walker, args=(
+            walker, waypoint_location, async_request_uri))
         movement_thread.start()
 
         # Return immediate response
@@ -1726,6 +1843,7 @@ def check_waypoint_proximity():
         print(f"Error in follow_direction: {str(e)}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
+
 @app.route('/change_path', methods=['POST'])
 def change_path():
     global entityList, pathsPerEntity, paths
@@ -1734,7 +1852,8 @@ def change_path():
         ajan_entity_id, async_request_uri = getInformation(request)
 
         # Suche die Entity in der entityList anhand der AJAN-ID
-        entity = next((e for e in entityList if e['label'] == ajan_entity_id), None)
+        entity = next(
+            (e for e in entityList if e['label'] == ajan_entity_id), None)
         if not entity:
             print(f"No entity found with AJAN ID '{ajan_entity_id}'")
             return jsonify({"status": "error", "message": "Entity not found"}), 404
@@ -1744,7 +1863,8 @@ def change_path():
         current_follows_path = entity.get('followsPath')
         current_fallback_path = entity.get('fallbackPath')
 
-        new_path = next((p for p in paths if p["path"] == current_fallback_path), None)
+        new_path = next(
+            (p for p in paths if p["path"] == current_fallback_path), None)
 
         pathsPerEntity[ajan_entity_id] = list(new_path["waypoints"])
 
@@ -1762,12 +1882,14 @@ def change_path():
         print(f"Error in change_path: {str(e)}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
+
 @app.route('/abort', methods=['POST'])
 def abort():
     ajan_entity_id, async_request_uri = getInformation(request)
     print(f"Aborting entity: {ajan_entity_id}")
     send_async_request(async_request_uri)
     return Response('<http://Agent> <http://aborted> <http://action> .', mimetype='text/turtle', status=200)
+
 
 @app.route('/look_left', methods=['POST'])
 def look_left():
@@ -1789,6 +1911,7 @@ def look_left():
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
 
 @app.route('/look_right', methods=['POST'])
 def look_right():
@@ -1821,6 +1944,7 @@ def look_right():
         print(f"Error in look_right: {str(e)}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
+
 @app.route('/reset_animation', methods=['POST'])
 def reset_animation():
     try:
@@ -1842,10 +1966,9 @@ def reset_animation():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+
 @app.route('/check_decision_point', methods=['POST'])
-
 @app.route('/check_vehicle_proximity', methods=['POST'])
-
 def get_grid_cell(location):
     """
     Determines the grid cell based on the given location.
@@ -1860,6 +1983,7 @@ def get_grid_cell(location):
     y = int((location.x - anchor_point.x) / cell_height - offset_y)
 
     return x, y
+
 
 @app.route('/decision-box-trigger', methods=['POST'])
 def decision_box_trigger():
@@ -1929,6 +2053,7 @@ def start_carla():
         print(f"An error occurred in start_carla: {e}")
         return jsonify({"error": "Internal server error occurred while starting CARLA.", "details": str(e)}), 500
 
+
 @app.route('/start_simulation', methods=['POST'])
 def start_simulation():
     global entityList
@@ -1940,8 +2065,8 @@ def start_simulation():
             return jsonify({"error": "Missing data"}), 400
 
         # Capabilities-Mapping (BT -> Capability)
-        capabilities = {item["bt"]: item["capability"] for item in data["capabilities"]}
-
+        capabilities = {item["bt"]: item["capability"]
+                        for item in data["capabilities"]}
 
         # Iteriere über alle Entities und sende die entsprechenden Informationen
         for entity in entityList:
@@ -1949,7 +2074,8 @@ def start_simulation():
             name = entity.get("label")
 
             if behavior not in capabilities:
-                print(f"No capability found for behavior: {behavior}", flush=True)
+                print(
+                    f"No capability found for behavior: {behavior}", flush=True)
                 continue
 
             capability = capabilities[behavior]
@@ -1970,6 +2096,8 @@ def start_simulation():
         return jsonify({"error": str(e)}), 500
 
 # * Loads all scenario information into the CARLA world.
+
+
 @app.route('/load_scenario', methods=['POST'])
 def load_scenario():
     global carla_client, entityList, paths
@@ -1984,7 +2112,8 @@ def load_scenario():
 
         # Finde das spezifische Szenario in der Liste, das 'scenarioName' entspricht
         scenario = next(
-            (s for s in scenario_list if s.get("scenarioName", "").split("#")[-1] == scenario_name),
+            (s for s in scenario_list if s.get(
+                "scenarioName", "").split("#")[-1] == scenario_name),
             None
         )
 
@@ -2005,7 +2134,6 @@ def load_scenario():
         show_paths = scenario.get("showPaths", "false")
         show_grid = scenario.get("showGrid", "false")
         load_layers = scenario.get("loadLayers", "false")
-
 
         # Lade die Welt basierend auf der Map and den Entitäten
         load_world(weather, scenario_map)
@@ -2048,6 +2176,7 @@ def load_scenario():
         print(f"Error in load_scenario: {str(e)}", flush=True)
         return jsonify({"error": str(e)}), 500
 
+
 @app.route('/destroy_actors', methods=['GET'])
 def destroy_actors():
     try:
@@ -2057,7 +2186,8 @@ def destroy_actors():
         if response.status_code != 200:
             return jsonify({"status": "error", "message": "Failed to fetch agents"}), 500
 
-        agents = parse_agents(response.text)  # Verwende die parse_agents-Funktion
+        # Verwende die parse_agents-Funktion
+        agents = parse_agents(response.text)
         deleted_agents = []
 
         for agent in agents:
@@ -2065,12 +2195,14 @@ def destroy_actors():
             if delete_response.status_code == 200:
                 deleted_agents.append(agent['id'])
             else:
-                print(f"Failed to delete agent {agent['id']}: {delete_response.text}")
+                print(
+                    f"Failed to delete agent {agent['id']}: {delete_response.text}")
 
         return jsonify({"status": "success", "deleted_agents": deleted_agents}), 200
     except Exception as e:
         print(f"Error in destroy_actors: {str(e)}")
         return jsonify({"status": "error", "message": str(e)}), 500
+
 
 @app.route('/proxy', methods=['GET'])
 def proxy():
@@ -2091,6 +2223,7 @@ def proxy():
 
     # Return the extracted content
     return Response(str(split_middle), content_type='text/html')
+
 
 if __name__ == '__main__':
     app.run(host="127.0.0.1", port=5000)
